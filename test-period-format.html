@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期号格式测试工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.544.0/dist/umd/lucide.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md mt-10">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">期号格式测试工具</h1>
+        
+        <div class="space-y-4">
+            <div>
+                <label for="test-period" class="block text-sm font-medium text-gray-700 mb-1">测试期号:</label>
+                <input type="text" id="test-period" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="请输入期号，如：2025143">
+            </div>
+            
+            <button id="test-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                测试格式
+            </button>
+            
+            <div id="result" class="p-4 rounded-md hidden"></div>
+            
+            <div class="mt-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">快速测试示例:</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">2025143</button>
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">20250143</button>
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">202514</button>
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">2025014</button>
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">25143</button>
+                    <button class="sample-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">20251430</button>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-gray-50 rounded-md">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">验证规则说明:</h3>
+                <p class="text-xs text-gray-600">当前验证规则: <code>/^\d{7,8}$/</code></p>
+                <p class="text-xs text-gray-600 mt-1">这表示期号必须是7-8位数字。</p>
+                <ul class="text-xs text-gray-600 mt-2 list-disc pl-4 space-y-1">
+                    <li>✅ 正确格式: 2025143 (7位)</li>
+                    <li>✅ 正确格式: 20250143 (8位)</li>
+                    <li>❌ 错误格式: 202514 (少于7位)</li>
+                    <li>❌ 错误格式: 20251430 (超过8位)</li>
+                    <li>❌ 错误格式: 25143 (少于7位)</li>
+                    <li>❌ 错误格式: abc123 (包含非数字字符)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const testInput = document.getElementById('test-period');
+            const testBtn = document.getElementById('test-btn');
+            const resultDiv = document.getElementById('result');
+            const sampleBtns = document.querySelectorAll('.sample-btn');
+            
+            // 测试函数
+            function testPeriodFormat(period) {
+                const regex = /^\d{7,8}$/;
+                const isValid = regex.test(period);
+                
+                resultDiv.className = `p-4 rounded-md ${isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+                resultDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            ${isValid ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>' : '<i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>'}
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium">${isValid ? '格式正确' : '格式错误'}</h3>
+                            <div class="mt-1 text-xs">
+                                <p>测试期号: <code>"${period}"</code></p>
+                                <p>长度: ${period.length} 位</p>
+                                <p>仅包含数字: ${/^\d+$/.test(period) ? '是' : '否'}</p>
+                                <p>验证结果: ${isValid ? '通过' : '不通过'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                resultDiv.classList.remove('hidden');
+                lucide.createIcons();
+            }
+            
+            // 绑定测试按钮事件
+            testBtn.addEventListener('click', function() {
+                const period = testInput.value.trim();
+                if (period) {
+                    testPeriodFormat(period);
+                } else {
+                    resultDiv.className = 'p-4 rounded-md bg-yellow-100 text-yellow-800';
+                    resultDiv.innerHTML = `
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="alert-circle" class="w-5 h-5 text-yellow-500"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium">请输入期号</h3>
+                                <p class="mt-1 text-xs">请在输入框中输入要测试的期号格式。</p>
+                            </div>
+                        </div>
+                    `;
+                    resultDiv.classList.remove('hidden');
+                    lucide.createIcons();
+                }
+            });
+            
+            // 绑定示例按钮事件
+            sampleBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const samplePeriod = this.textContent;
+                    testInput.value = samplePeriod;
+                    testPeriodFormat(samplePeriod);
+                });
+            });
+            
+            // 绑定回车键事件
+            testInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    testBtn.click();
+                }
+            });
+            
+            // 初始化图标
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

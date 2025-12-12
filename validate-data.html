@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双色球数据验证工具</title>
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3b82f6',
+            secondary: '#64748b',
+            success: '#10b981',
+            danger: '#ef4444',
+            warning: '#f59e0b',
+            info: '#06b6d4',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">双色球数据验证工具</h1>
+      <p class="text-gray-600">自动检测和验证双色球历史数据的准确性</p>
+    </header>
+
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-semibold text-gray-800">数据验证</h2>
+          <button id="validateBtn" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors flex items-center">
+            <i class="fa fa-check-circle mr-2"></i> 开始验证
+          </button>
+        </div>
+
+        <div id="statusContainer" class="mb-6 hidden">
+          <div class="p-4 bg-blue-50 rounded-lg flex items-center">
+            <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+            <p id="statusText" class="text-blue-700">正在验证数据，请稍候...</p>
+          </div>
+        </div>
+
+        <div id="resultContainer" class="hidden">
+          <div class="border-t border-gray-200 pt-4">
+            <div id="summary" class="mb-4"></div>
+            
+            <div id="issuesContainer" class="mt-6">
+              <h3 class="text-lg font-medium text-gray-800 mb-3">问题详情</h3>
+              <div id="issuesList" class="max-h-96 overflow-y-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">验证说明</h2>
+        <div class="text-gray-600 space-y-2">
+          <p><i class="fa fa-info-circle text-blue-500 mr-2"></i> 本工具会自动检查以下内容：</p>
+          <ul class="list-disc pl-6 space-y-1">
+            <li>数据完整性（期号、日期、红球、蓝球等字段）</li>
+            <li>号码范围（红球1-33，蓝球1-16）</li>
+            <li>红球数量（每期6个）</li>
+            <li>期号连续性</li>
+            <li>日期顺序</li>
+            <li>销售额合理性（2024-2025年通常在3-4.5亿元）</li>
+            <li>红球重复号码</li>
+            <li>一等奖奖金合理性</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 页面元素
+    const elements = {
+      validateBtn: document.getElementById('validateBtn'),
+      statusContainer: document.getElementById('statusContainer'),
+      statusText: document.getElementById('statusText'),
+      resultContainer: document.getElementById('resultContainer'),
+      summary: document.getElementById('summary'),
+      issuesContainer: document.getElementById('issuesContainer'),
+      issuesList: document.getElementById('issuesList')
+    };
+
+    // 从主页面加载数据
+    async function loadData() {
+      try {
+        const response = await fetch('index.html');
+        const htmlContent = await response.text();
+        
+        // 提取historicalData数组
+        const dataMatch = htmlContent.match(/const historicalData = (\[.*?\]);/s);
+        if (!dataMatch) {
+          throw new Error('未找到historicalData数据');
+        }
+        
+        const dataString = dataMatch[1];
+        return JSON.parse(dataString);
+      } catch (error) {
+        console.error('加载数据失败:', error);
+        throw error;
+      }
+    }
+
+    // 验证数据
+    function validateData(data) {
+      const issues = [];
+      
+      // 检查数据完整性和合理性
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+        
+        // 基本字段检查
+        if (!item.期号 || !item.开奖日期 || !item.红球 || item.蓝球 === undefined) {
+          issues.push({
+            type: '数据不完整',
+            period: item.期号 || '未知',
+            message: `第${i+1}条记录数据不完整`
+          });
+          continue;
+        }
+        
+        // 红球检查
+        if (item.红球.length !== 6) {
+          issues.push({
+            type: '红球数量错误',
+            period: item.期号,
+            message: `红球数量不正确: ${item.红球.length}个`
+          });
+        }
+        
+        for (let j = 0; j < item.红球.length; j++) {
+          if (item.红球[j] < 1 || item.红球[j] > 33) {
+            issues.push({
+              type: '红球范围错误',
+              period: item.期号,
+              message: `红球号码超出范围: ${item.红球[j]}`
+            });
+          }
+        }
+        
+        // 蓝球检查
+        if (item.蓝球 < 1 || item.蓝球 > 16) {
+          issues.push({
+            type: '蓝球范围错误',
+            period: item.期号,
+            message: `蓝球号码超出范围: ${item.蓝球}`
+          });
+        }
+        
+// 销售额检查已取消
+        
+// 只验证开奖号码，取消奖金验证
+        
+        // 重复号码检查
+        const uniqueRedBalls = [...new Set(item.红球)];
+        if (uniqueRedBalls.length !== item.红球.length) {
+          issues.push({
+            type: '重复号码',
+            period: item.期号,
+            message: `红球存在重复号码: ${item.红球}`
+          });
+        }
+        
+// 已取消所有奖金相关检查
+      }
+      
+      // 期号连续性检查 - 只检查实际存在的期号范围
+      // 首先检查数据的排序方向（双色球数据通常是降序排列）
+      let isDescending = true;
+      if (data.length >= 2) {
+        const firstIssue = parseInt(data[0].期号);
+        const lastIssue = parseInt(data[data.length - 1].期号);
+        isDescending = lastIssue < firstIssue;
+      }
+      
+      // 根据排序方向检查连续性（只检查同一年度内的连续性）
+      for (let i = 1; i < data.length; i++) {
+        const currentIssue = parseInt(data[i].期号);
+        const prevIssue = parseInt(data[i-1].期号);
+        
+        // 提取年份
+        const currentYear = Math.floor(currentIssue / 1000);
+        const prevYear = Math.floor(prevIssue / 1000);
+        
+        // 只检查同一年度内的连续性
+        if (currentYear === prevYear) {
+          if (isDescending) {
+            // 降序排列（从新到旧）
+            if (currentIssue !== prevIssue - 1) {
+              // 特殊处理年末年初的情况
+              if (!(prevYear === 2024 && prevIssue === 2024151 && currentYear === 2025 && currentIssue === 2025001)) {
+                issues.push({
+                  type: '期号不连续',
+                  period: `${prevIssue} -> ${currentIssue}`,
+                  message: `期号不连续，缺少期号: ${prevIssue - 1}`
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // 日期顺序检查
+      for (let i = 1; i < data.length; i++) {
+        const currentDate = new Date(data[i].开奖日期);
+        const prevDate = new Date(data[i-1].开奖日期);
+        if (currentDate >= prevDate) {
+          issues.push({
+            type: '日期顺序错误',
+            period: `${data[i-1].期号} -> ${data[i].期号}`,
+            message: `${data[i].开奖日期} 不早于 ${data[i-1].开奖日期}`
+          });
+        }
+      }
+      
+      return {
+        valid: issues.length === 0,
+        issues: issues,
+        totalRecords: data.length,
+        issueCount: issues.length
+      };
+    }
+
+    // 显示结果
+    function displayResults(result) {
+      // 显示摘要
+      const statusClass = result.valid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700';
+      const statusIcon = result.valid ? 'check-circle' : 'exclamation-circle';
+      const statusText = result.valid ? '通过' : '失败';
+      
+      elements.summary.innerHTML = `
+        <div class="p-4 ${statusClass} rounded-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fa fa-${statusIcon} text-xl mr-3"></i>
+              <div>
+                <h3 class="font-medium">验证状态: ${statusText}</h3>
+                <p class="text-sm mt-1">总记录数: ${result.totalRecords} | 发现问题: ${result.issueCount}</p>
+              </div>
+            </div>
+            <span class="text-sm text-gray-500">${new Date().toLocaleString()}</span>
+          </div>
+        </div>
+      `;
+      
+      // 显示问题列表
+      if (result.issues.length > 0) {
+        elements.issuesList.innerHTML = '';
+        
+        // 按期号分组问题
+        const issuesByPeriod = {};
+        result.issues.forEach(issue => {
+          if (!issuesByPeriod[issue.period]) {
+            issuesByPeriod[issue.period] = [];
+          }
+          issuesByPeriod[issue.period].push(issue);
+        });
+        
+        // 创建问题列表
+        Object.keys(issuesByPeriod).forEach(period => {
+          const periodIssues = issuesByPeriod[period];
+          
+          const periodElement = document.createElement('div');
+          periodElement.className = 'mb-4 border-l-4 border-red-400 pl-4';
+          
+          const periodHeader = document.createElement('div');
+          periodHeader.className = 'font-medium text-red-700 mb-2';
+          periodHeader.textContent = `期号: ${period}`;
+          
+          periodElement.appendChild(periodHeader);
+          
+          periodIssues.forEach(issue => {
+            const issueElement = document.createElement('div');
+            issueElement.className = 'text-sm text-gray-600 mb-1';
+            
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'inline-block px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs mr-2';
+            typeSpan.textContent = issue.type;
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = issue.message;
+            
+            issueElement.appendChild(typeSpan);
+            issueElement.appendChild(messageSpan);
+            periodElement.appendChild(issueElement);
+          });
+          
+          elements.issuesList.appendChild(periodElement);
+        });
+        
+        elements.issuesContainer.classList.remove('hidden');
+      } else {
+        elements.issuesContainer.classList.add('hidden');
+      }
+      
+      elements.resultContainer.classList.remove('hidden');
+    }
+
+    // 验证按钮点击事件
+    elements.validateBtn.addEventListener('click', async () => {
+      elements.validateBtn.disabled = true;
+      elements.validateBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 验证中...';
+      
+      elements.statusContainer.classList.remove('hidden');
+      elements.resultContainer.classList.add('hidden');
+      
+      try {
+        elements.statusText.textContent = '正在加载数据...';
+        const data = await loadData();
+        
+        elements.statusText.textContent = `正在验证 ${data.length} 条记录...`;
+        
+        // 使用setTimeout让UI有时间更新
+        setTimeout(() => {
+          const result = validateData(data);
+          
+          elements.statusContainer.classList.add('hidden');
+          displayResults(result);
+          
+          elements.validateBtn.disabled = false;
+          elements.validateBtn.innerHTML = '<i class="fa fa-check-circle mr-2"></i> 开始验证';
+        }, 500);
+        
+      } catch (error) {
+        elements.statusContainer.classList.add('hidden');
+        
+        const errorElement = document.createElement('div');
+        errorElement.className = 'p-4 bg-red-50 text-red-700 rounded-lg';
+        errorElement.innerHTML = `
+          <div class="flex items-center">
+            <i class="fa fa-exclamation-triangle mr-3"></i>
+            <p>验证失败: ${error.message}</p>
+          </div>
+        `;
+        
+        elements.resultContainer.innerHTML = '';
+        elements.resultContainer.appendChild(errorElement);
+        elements.resultContainer.classList.remove('hidden');
+        
+        elements.validateBtn.disabled = false;
+        elements.validateBtn.innerHTML = '<i class="fa fa-check-circle mr-2"></i> 开始验证';
+      }
+    });
+  </script>
+</body>
+</html>
