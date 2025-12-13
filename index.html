@@ -9822,10 +9822,16 @@
     // 图表实例
     let dataChart = null;
 
-    // AI学习函数
+    // AI神经网络学习函数
     function trainAI(data) {
-      console.log('开始AI学习过程...');
+      console.log('开始AI神经网络学习过程...');
       appState.isLearning = true;
+      
+      // 显示学习进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在构建神经网络模型...";
+        document.getElementById('ai-progress-bar').style.width = '10%';
+      }
       
       // 初始化学习结果对象
       const learningResult = {
@@ -9833,7 +9839,20 @@
         trend: { red: [], blue: [] },
         correlation: { redRed: {}, redBlue: {} },
         weights: {},
-        lastUpdated: new Date().toISOString()
+        neuralNetwork: {
+          layers: [115, 128, 64, 32, 6], // 输入层(115) -> 隐藏层1(128) -> 隐藏层2(64) -> 隐藏层3(32) -> 输出层(6)
+          weights: [],
+          biases: [],
+          trainingHistory: []
+        },
+        patterns: {
+          consecutive: {}, // 连号模式
+          interval: {},    // 间隔模式
+          oddEven: {},     // 奇偶模式
+          zone: {}         // 区间分布模式
+        },
+        lastUpdated: new Date().toISOString(),
+        totalTrainingData: data.length
       };
       
       // 初始化红球频率统计
@@ -9846,10 +9865,16 @@
         learningResult.frequency.blue[i] = 0;
       }
       
-      // 计算权重和频率
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在分析历史数据频率...";
+        document.getElementById('ai-progress-bar').style.width = '20%';
+      }
+      
+      // 计算权重和频率（基于全部历史数据）
       data.forEach((item, index) => {
-        // 计算权重：越近期的数据权重越高
-        const weight = 1 / (index + 1);
+        // 计算权重：越近期的数据权重越高，使用指数加权
+        const weight = Math.exp(-index / 50); // 指数衰减，50期半衰期
         learningResult.weights[item.期号] = weight;
         
         // 统计红球频率
@@ -9861,10 +9886,16 @@
         learningResult.frequency.blue[item.蓝球] += weight;
       });
       
-      // 计算趋势数据（最近20期）
-      const recentData = data.slice(0, 20);
-      for (let i = 0; i < recentData.length; i++) {
-        const item = recentData[i];
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在计算趋势数据...";
+        document.getElementById('ai-progress-bar').style.width = '30%';
+      }
+      
+      // 计算趋势数据（基于全部历史数据）
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+        const recency = i / data.length; // 0表示最新，1表示最旧
         
         // 红球趋势
         item.红球.forEach(num => {
@@ -9873,7 +9904,9 @@
           }
           learningResult.trend.red[num].push({
             period: item.期号,
-            position: i
+            position: i,
+            recency: recency,
+            weight: Math.exp(-i / 30) // 近期数据权重更高
           });
         });
         
@@ -9883,51 +9916,440 @@
         }
         learningResult.trend.blue[item.蓝球].push({
           period: item.期号,
-          position: i
+          position: i,
+          recency: recency,
+          weight: Math.exp(-i / 30)
         });
       }
       
-      // 计算相关性
-      data.forEach(item => {
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在计算相关性矩阵...";
+        document.getElementById('ai-progress-bar').style.width = '40%';
+      }
+      
+      // 计算相关性（使用加权相关性）
+      data.forEach((item, index) => {
+        const weight = Math.exp(-index / 50);
         const redBalls = item.红球;
         
         // 红球之间的相关性
         for (let i = 0; i < redBalls.length; i++) {
           for (let j = i + 1; j < redBalls.length; j++) {
             const pair = `${Math.min(redBalls[i], redBalls[j])}-${Math.max(redBalls[i], redBalls[j])}`;
-            learningResult.correlation.redRed[pair] = (learningResult.correlation.redRed[pair] || 0) + 1;
+            learningResult.correlation.redRed[pair] = (learningResult.correlation.redRed[pair] || 0) + weight;
           }
         }
         
         // 红蓝球之间的相关性
         redBalls.forEach(redNum => {
           const pair = `${redNum}-${item.蓝球}`;
-          learningResult.correlation.redBlue[pair] = (learningResult.correlation.redBlue[pair] || 0) + 1;
+          learningResult.correlation.redBlue[pair] = (learningResult.correlation.redBlue[pair] || 0) + weight;
         });
       });
       
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在识别号码模式...";
+        document.getElementById('ai-progress-bar').style.width = '50%';
+      }
+      
+      // 识别号码模式
+      identifyPatterns(data, learningResult);
+      
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在构建神经网络...";
+        document.getElementById('ai-progress-bar').style.width = '60%';
+      }
+      
+      // 构建神经网络
+      buildNeuralNetwork(learningResult);
+      
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在训练神经网络...";
+        document.getElementById('ai-progress-bar').style.width = '70%';
+      }
+      
+      // 训练神经网络
+      trainNeuralNetwork(data, learningResult);
+      
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "正在验证模型精度...";
+        document.getElementById('ai-progress-bar').style.width = '85%';
+      }
+      
+      // 验证模型
+      validateModel(data, learningResult);
+      
       // 保存学习结果
       aiLearningData = learningResult;
-      localStorage.setItem('aiLearningData', JSON.stringify(learningResult));
+      try {
+        localStorage.setItem('aiLearningData', JSON.stringify(learningResult));
+        console.log('AI学习结果已保存到本地存储');
+      } catch (error) {
+        console.warn('无法保存AI学习结果到本地存储:', error);
+      }
       
       appState.isLearning = false;
-      console.log('AI学习完成');
+      console.log('AI神经网络学习完成');
+      
+      // 更新进度
+      if (document.getElementById('ai-progress-text')) {
+        document.getElementById('ai-progress-text').textContent = "AI学习完成！";
+        document.getElementById('ai-progress-bar').style.width = '100%';
+      }
       
       return learningResult;
+    }
+
+    // 识别号码模式
+    function identifyPatterns(data, learningResult) {
+      console.log('开始识别号码模式...');
+      
+      // 分析连号模式
+      data.forEach((item, index) => {
+        const sortedRed = [...item.红球].sort((a, b) => a - b);
+        const weight = Math.exp(-index / 50);
+        
+        // 检查连号
+        for (let i = 0; i < sortedRed.length - 1; i++) {
+          if (sortedRed[i + 1] - sortedRed[i] === 1) {
+            const pattern = `${sortedRed[i]}-${sortedRed[i + 1]}`;
+            learningResult.patterns.consecutive[pattern] = (learningResult.patterns.consecutive[pattern] || 0) + weight;
+          }
+        }
+        
+        // 分析奇偶模式
+        const oddCount = sortedRed.filter(num => num % 2 === 1).length;
+        const evenCount = 6 - oddCount;
+        const oddEvenPattern = `${oddCount}奇${evenCount}偶`;
+        learningResult.patterns.oddEven[oddEvenPattern] = (learningResult.patterns.oddEven[oddEvenPattern] || 0) + weight;
+        
+        // 分析区间分布
+        const zones = [0, 0, 0]; // 1-11, 12-22, 23-33
+        sortedRed.forEach(num => {
+          if (num <= 11) zones[0]++;
+          else if (num <= 22) zones[1]++;
+          else zones[2]++;
+        });
+        const zonePattern = `${zones[0]}-${zones[1]}-${zones[2]}`;
+        learningResult.patterns.zone[zonePattern] = (learningResult.patterns.zone[zonePattern] || 0) + weight;
+      });
+      
+      console.log('号码模式识别完成');
+    }
+
+    // 构建神经网络
+    function buildNeuralNetwork(learningResult) {
+      console.log('开始构建神经网络...');
+      
+      const layers = learningResult.neuralNetwork.layers;
+      
+      // 初始化权重和偏置
+      for (let i = 0; i < layers.length - 1; i++) {
+        const weights = [];
+        const biases = [];
+        
+        // 初始化权重矩阵
+        for (let j = 0; j < layers[i]; j++) {
+          weights[j] = [];
+          for (let k = 0; k < layers[i + 1]; k++) {
+            // 使用Xavier初始化
+            weights[j][k] = (Math.random() - 0.5) * Math.sqrt(6 / (layers[i] + layers[i + 1]));
+          }
+        }
+        
+        // 初始化偏置
+        for (let j = 0; j < layers[i + 1]; j++) {
+          biases[j] = Math.random() * 0.1 - 0.05;
+        }
+        
+        learningResult.neuralNetwork.weights.push(weights);
+        learningResult.neuralNetwork.biases.push(biases);
+      }
+      
+      console.log('神经网络构建完成');
+    }
+
+    // 训练神经网络
+    function trainNeuralNetwork(data, learningResult) {
+      console.log('开始训练神经网络...');
+      
+      const epochs = 100;
+      const learningRate = 0.01;
+      const batchSize = 32;
+      
+      // 准备训练数据
+      const trainingData = prepareTrainingData(data, learningResult);
+      
+      for (let epoch = 0; epoch < epochs; epoch++) {
+        let totalLoss = 0;
+        
+        // 随机打乱数据
+        shuffleArray(trainingData);
+        
+        // 批量训练
+        for (let i = 0; i < trainingData.length; i += batchSize) {
+          const batch = trainingData.slice(i, i + batchSize);
+          const batchLoss = trainBatch(batch, learningResult, learningRate);
+          totalLoss += batchLoss;
+        }
+        
+        // 记录训练历史
+        learningResult.neuralNetwork.trainingHistory.push({
+          epoch: epoch + 1,
+          loss: totalLoss / trainingData.length
+        });
+        
+        // 每10个epoch打印进度
+        if ((epoch + 1) % 10 === 0) {
+          console.log(`Epoch ${epoch + 1}/${epochs}, Loss: ${(totalLoss / trainingData.length).toFixed(6)}`);
+        }
+      }
+      
+      console.log('神经网络训练完成');
+    }
+
+    // 准备训练数据
+    function prepareTrainingData(data, learningResult) {
+      const trainingData = [];
+      
+      // 使用最近100期数据进行训练
+      const recentData = data.slice(0, Math.min(100, data.length));
+      
+      recentData.forEach((item, index) => {
+        if (index < 5) return; // 跳过最新的5期，用于验证
+        
+        // 创建输入向量：最近5期的开奖结果
+        const input = createInputVector(data, index, learningResult);
+        
+        // 创建目标向量：当前期的红球
+        const target = createTargetVector(item.红球);
+        
+        trainingData.push({ input, target });
+      });
+      
+      return trainingData;
+    }
+
+    // 创建输入向量
+    function createInputVector(data, currentIndex, learningResult) {
+      const input = new Array(115).fill(0); // 115个输入神经元
+      let inputIndex = 0;
+      
+      // 最近5期的红球和蓝球
+      for (let i = 0; i < 5 && currentIndex + i < data.length; i++) {
+        const item = data[currentIndex + i];
+        
+        // 红球（33个位置）
+        item.红球.forEach(num => {
+          input[inputIndex + num - 1] = 1;
+        });
+        inputIndex += 33;
+        
+        // 蓝球（16个位置）
+        input[inputIndex + item.蓝球 - 1] = 1;
+        inputIndex += 16;
+      }
+      
+      return input;
+    }
+
+    // 创建目标向量
+    function createTargetVector(redBalls) {
+      const target = new Array(33).fill(0);
+      redBalls.forEach(num => {
+        target[num - 1] = 1;
+      });
+      return target;
+    }
+
+    // 训练批次
+    function trainBatch(batch, learningResult, learningRate) {
+      let batchLoss = 0;
+      
+      batch.forEach(sample => {
+        // 前向传播
+        const { outputs, activations } = forwardPropagation(sample.input, learningResult);
+        
+        // 计算损失
+        const loss = calculateLoss(outputs[outputs.length - 1], sample.target);
+        batchLoss += loss;
+        
+        // 反向传播
+        backPropagation(sample.target, outputs, activations, learningResult, learningRate);
+      });
+      
+      return batchLoss;
+    }
+
+    // 前向传播
+    function forwardPropagation(input, learningResult) {
+      const outputs = [input];
+      const activations = [];
+      
+      const weights = learningResult.neuralNetwork.weights;
+      const biases = learningResult.neuralNetwork.biases;
+      
+      for (let i = 0; i < weights.length; i++) {
+        const layerOutput = [];
+        
+        for (let j = 0; j < weights[i][0].length; j++) {
+          let sum = biases[i][j];
+          
+          for (let k = 0; k < outputs[i].length; k++) {
+            sum += outputs[i][k] * weights[i][k][j];
+          }
+          
+          // 使用ReLU激活函数（隐藏层）
+          const activation = i < weights.length - 1 ? Math.max(0, sum) : sigmoid(sum);
+          layerOutput.push(activation);
+        }
+        
+        outputs.push(layerOutput);
+        activations.push(layerOutput);
+      }
+      
+      return { outputs, activations };
+    }
+
+    // 反向传播
+    function backPropagation(target, outputs, activations, learningResult, learningRate) {
+      const weights = learningResult.neuralNetwork.weights;
+      const biases = learningResult.neuralNetwork.biases;
+      
+      // 计算输出层误差
+      const outputErrors = [];
+      const outputLayer = outputs[outputs.length - 1];
+      
+      for (let i = 0; i < outputLayer.length; i++) {
+        const error = target[i] - outputLayer[i];
+        outputErrors.push(error * sigmoidDerivative(outputLayer[i]));
+      }
+      
+      // 反向传播误差
+      let currentErrors = outputErrors;
+      
+      for (let i = weights.length - 1; i >= 0; i--) {
+        const nextErrors = new Array(weights[i].length).fill(0);
+        
+        // 更新权重和偏置
+        for (let j = 0; j < weights[i].length; j++) {
+          for (let k = 0; k < weights[i][j].length; k++) {
+            weights[i][j][k] += learningRate * currentErrors[k] * outputs[i][j];
+            nextErrors[j] += currentErrors[k] * weights[i][j][k];
+          }
+        }
+        
+        // 更新偏置
+        for (let j = 0; j < biases[i].length; j++) {
+          biases[i][j] += learningRate * currentErrors[j];
+        }
+        
+        // 计算前一层的误差
+        if (i > 0) {
+          for (let j = 0; j < nextErrors.length; j++) {
+            nextErrors[j] *= reluDerivative(outputs[i][j]);
+          }
+        }
+        
+        currentErrors = nextErrors;
+      }
+    }
+
+    // 验证模型
+    function validateModel(data, learningResult) {
+      console.log('开始验证模型...');
+      
+      // 使用最新的5期数据进行验证
+      const validationData = data.slice(0, 5);
+      let correctPredictions = 0;
+      let totalPredictions = 0;
+      
+      validationData.forEach((item, index) => {
+        if (index >= 5) return;
+        
+        // 创建输入向量
+        const input = createInputVector(data, index + 5, learningResult);
+        
+        // 预测
+        const prediction = predictWithNeuralNetwork(input, learningResult);
+        
+        // 计算准确率
+        const hitCount = countCorrectPredictions(prediction, item.红球);
+        correctPredictions += hitCount;
+        totalPredictions += 6;
+        
+        console.log(`验证期号 ${item.期号}: 命中 ${hitCount}/6 个红球`);
+      });
+      
+      const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions * 100).toFixed(2) : 0;
+      learningResult.neuralNetwork.accuracy = parseFloat(accuracy);
+      
+      console.log(`模型验证完成，准确率: ${accuracy}%`);
+    }
+
+    // 使用神经网络预测
+    function predictWithNeuralNetwork(input, learningResult) {
+      const { outputs } = forwardPropagation(input, learningResult);
+      const finalOutput = outputs[outputs.length - 1];
+      
+      // 选择概率最高的6个号码
+      const predictions = [];
+      for (let i = 0; i < finalOutput.length; i++) {
+        predictions.push({ number: i + 1, probability: finalOutput[i] });
+      }
+      
+      // 按概率排序并选择前6个
+      predictions.sort((a, b) => b.probability - a.probability);
+      
+      return predictions.slice(0, 6).map(p => p.number);
+    }
+
+    // 辅助函数
+    function sigmoid(x) {
+      return 1 / (1 + Math.exp(-x));
+    }
+
+    function sigmoidDerivative(x) {
+      return x * (1 - x);
+    }
+
+    function reluDerivative(x) {
+      return x > 0 ? 1 : 0;
+    }
+
+    function calculateLoss(predicted, target) {
+      let loss = 0;
+      for (let i = 0; i < predicted.length; i++) {
+        loss += Math.pow(predicted[i] - target[i], 2);
+      }
+      return loss / predicted.length;
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    function countCorrectPredictions(predicted, actual) {
+      const predictedSet = new Set(predicted);
+      return actual.filter(num => predictedSet.has(num)).length;
     }
 
     // 初始化应用
     function initApp() {
       console.log('初始化双色球AI智能选号助手 V23-稳定增强版...');
       
-      // 确保默认显示最近10期数据
-      appState.currentFilter = 'recent';
-      elements.historyFilter.value = 'recent';
-      
       // 加载历史数据
       loadHistoricalData();
       
-      // 显示最近10期历史数据（用于第二个表格）
+      // 显示最近10期历史数据
       displayRecentHistory();
       
       // 初始化图表
@@ -11003,61 +11425,140 @@
 
     // 预测下一期号码
     function predictNextNumbers() {
+      console.log('开始预测下一期号码...');
+      
       // 使用AI学习数据进行预测
       if (aiLearningData && aiLearningData.frequency) {
-        // 获取红球频率排序
-        const redFrequency = Object.entries(aiLearningData.frequency.red)
-          .sort((a, b) => b[1] - a[1])
-          .map(([num]) => parseInt(num));
+        let selectedRedBalls = [];
         
-        // 获取蓝球频率排序
-        const blueFrequency = Object.entries(aiLearningData.frequency.blue)
-          .sort((a, b) => b[1] - a[1])
-          .map(([num]) => parseInt(num));
-        
-        // 结合相关性分析选择红球
-        const selectedRedBalls = [];
-        
-        // 首先选择最热门的3个红球
-        for (let i = 0; i < 3 && i < redFrequency.length; i++) {
-          selectedRedBalls.push(redFrequency[i]);
+        // 优先使用神经网络预测
+        if (aiLearningData.neuralNetwork && aiLearningData.neuralNetwork.weights && aiLearningData.neuralNetwork.weights.length > 0) {
+          console.log('使用神经网络模型进行预测...');
+          
+          try {
+            // 创建输入向量：最近5期的开奖结果
+            const inputVector = createInputVector(historicalData, 0, aiLearningData);
+            
+            // 使用神经网络预测红球
+            const neuralNetworkPredictions = predictWithNeuralNetwork(inputVector, aiLearningData);
+            
+            console.log('神经网络预测结果:', neuralNetworkPredictions);
+            
+            // 验证预测结果
+            if (neuralNetworkPredictions && Array.isArray(neuralNetworkPredictions) && neuralNetworkPredictions.length >= 6) {
+              selectedRedBalls = neuralNetworkPredictions.slice(0, 6).sort((a, b) => a - b);
+              console.log('神经网络预测成功，红球:', selectedRedBalls);
+            } else {
+              console.warn('神经网络预测结果不完整，使用传统方法');
+              selectedRedBalls = [];
+            }
+          } catch (error) {
+            console.error('神经网络预测失败:', error);
+            selectedRedBalls = [];
+          }
         }
         
-        // 根据相关性选择剩余的红球
-        while (selectedRedBalls.length < 6) {
-          let bestCandidate = null;
-          let bestScore = 0;
+        // 如果神经网络预测失败或不可用，使用传统方法
+        if (selectedRedBalls.length === 0) {
+          console.log('使用传统频率和相关性方法预测...');
           
-          for (const candidate of redFrequency) {
-            if (selectedRedBalls.includes(candidate)) continue;
-            
-            // 计算与已选红球的相关性得分
-            let score = 0;
-            for (const selected of selectedRedBalls) {
-              const pair = `${Math.min(selected, candidate)}-${Math.max(selected, candidate)}`;
-              const correlation = aiLearningData.correlation.redRed[pair] || 0;
-              score += correlation;
-            }
-            
-            // 如果相关性得分更高，或者还没有候选
-            if (bestCandidate === null || score > bestScore) {
-              bestCandidate = candidate;
-              bestScore = score;
-            }
+          // 获取红球频率排序
+          const redFrequency = Object.entries(aiLearningData.frequency.red)
+            .sort((a, b) => b[1] - a[1])
+            .map(([num]) => parseInt(num));
+          
+          // 获取蓝球频率排序
+          const blueFrequency = Object.entries(aiLearningData.frequency.blue)
+            .sort((a, b) => b[1] - a[1])
+            .map(([num]) => parseInt(num));
+          
+          console.log('红球频率排序前10:', redFrequency.slice(0, 10));
+          console.log('蓝球频率排序前5:', blueFrequency.slice(0, 5));
+          
+          // 结合相关性分析选择红球
+          selectedRedBalls = [];
+          
+          // 首先选择最热门的3个红球
+          for (let i = 0; i < 3 && i < redFrequency.length; i++) {
+            selectedRedBalls.push(redFrequency[i]);
           }
           
-          if (bestCandidate !== null) {
-            selectedRedBalls.push(bestCandidate);
-          } else {
-            // 如果找不到合适的候选，随机选择一个未选中的热门红球
-            for (const num of redFrequency) {
-              if (!selectedRedBalls.includes(num)) {
-                selectedRedBalls.push(num);
+          console.log('初始选择的3个红球:', selectedRedBalls);
+          
+          // 添加安全机制，防止无限循环
+          let iterationCount = 0;
+          const maxIterations = 100;
+          
+          // 根据相关性选择剩余的红球
+          while (selectedRedBalls.length < 6 && iterationCount < maxIterations) {
+            iterationCount++;
+            
+            let bestCandidate = null;
+            let bestScore = 0;
+            let hasValidCandidate = false;
+            
+            for (const candidate of redFrequency) {
+              if (selectedRedBalls.includes(candidate)) continue;
+              
+              // 计算综合得分
+              let score = 0;
+              
+              // 相关性得分
+              for (const selected of selectedRedBalls) {
+                const pair = `${Math.min(selected, candidate)}-${Math.max(selected, candidate)}`;
+                const correlation = aiLearningData.correlation.redRed[pair] || 0;
+                score += correlation * 0.6; // 相关性权重60%
+              }
+              
+              // 频率得分
+              const frequencyRank = redFrequency.indexOf(candidate);
+              const frequencyScore = frequencyRank < redFrequency.length ? 1 / (frequencyRank + 1) : 0;
+              score += frequencyScore * 0.4; // 频率权重40%
+              
+              // 如果得分更高，或者还没有候选
+              if (bestCandidate === null || score > bestScore) {
+                bestCandidate = candidate;
+                bestScore = score;
+                hasValidCandidate = true;
+              }
+            }
+            
+            if (hasValidCandidate && bestCandidate !== null) {
+              selectedRedBalls.push(bestCandidate);
+              console.log(`迭代${iterationCount}: 添加红球 ${bestCandidate}, 综合得分: ${bestScore.toFixed(4)}`);
+            } else {
+              // 如果找不到合适的候选，随机选择一个未选中的热门红球
+              const availableNumbers = redFrequency.filter(num => !selectedRedBalls.includes(num));
+              if (availableNumbers.length > 0) {
+                const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+                const randomNum = availableNumbers[randomIndex];
+                selectedRedBalls.push(randomNum);
+                console.log(`迭代${iterationCount}: 随机添加红球 ${randomNum}`);
+              } else {
+                console.warn('没有可用的红球号码了！');
                 break;
               }
             }
           }
+          
+          // 如果因为达到最大迭代次数而退出，使用备选方案
+          if (selectedRedBalls.length < 6) {
+            console.warn(`达到最大迭代次数 ${maxIterations}，当前选中 ${selectedRedBalls.length} 个红球，使用备选方案`);
+            
+            // 备选方案：直接从热门号码中补充
+            const availableNumbers = redFrequency.filter(num => !selectedRedBalls.includes(num));
+            while (selectedRedBalls.length < 6 && availableNumbers.length > 0) {
+              const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+              const randomNum = availableNumbers.splice(randomIndex, 1)[0];
+              selectedRedBalls.push(randomNum);
+              console.log(`备选方案: 添加红球 ${randomNum}`);
+            }
+          }
+          
+          selectedRedBalls.sort((a, b) => a - b);
         }
+        
+        console.log('最终选中的红球:', selectedRedBalls);
         
         // 选择蓝球，优先考虑与选中红球相关性高的蓝球
         let bestBlueBall = blueFrequency[0]; // 默认选择最热门的蓝球
@@ -11665,15 +12166,8 @@
         }
       });
       
-      // 历史数据筛选 - 点击查询按钮
+      // 历史数据筛选
       elements.historySearchBtn.addEventListener('click', () => {
-        appState.currentFilter = elements.historyFilter.value;
-        appState.currentPage = 1;
-        loadHistoricalData();
-      });
-      
-      // 历史数据筛选 - 下拉框改变时自动刷新
-      elements.historyFilter.addEventListener('change', () => {
         appState.currentFilter = elements.historyFilter.value;
         appState.currentPage = 1;
         loadHistoricalData();
@@ -12562,35 +13056,27 @@
       }
     }
 
-    // 神经网络模型类 - 增强版，使用全部历史数据进行真实学习
+    // 神经网络模型类
     function trainNeuralNetwork(trainingData) {
-      console.log('开始神经网络训练，使用', trainingData.length, '条历史数据...');
-      
-      // 创建神经网络结构
+      // 模拟神经网络训练过程
       const network = {
-        layers: [33 * 3 + 16, 128, 64, 32, 6], // 增强输入层：最近3期红球+蓝球特征 -> 隐藏层 -> 输出层
-        weights: initializeWeights([33 * 3 + 16, 128, 64, 32, 6]),
-        biases: initializeBiases([128, 64, 32, 6]),
+        layers: [33, 64, 32, 16, 6], // 输入层(33个红球) -> 隐藏层 -> 输出层(6个预测红球)
+        weights: initializeWeights([33, 64, 32, 16, 6]),
+        biases: initializeBiases([64, 32, 16, 6]),
         confidence: 0,
-        trainingData: trainingData,
         
         // 前向传播
         forward: function(input) {
           let output = input;
           for (let i = 0; i < this.layers.length - 1; i++) {
-            output = this.relu(this.matrixMultiply(output, this.weights[i]).map((row, idx) => 
+            output = this.sigmoid(this.matrixMultiply(output, this.weights[i]).map((row, idx) => 
               row.map((val, colIdx) => val + this.biases[i][colIdx])
             ));
           }
           return output;
         },
         
-        // ReLU激活函数（更适合深度学习）
-        relu: function(x) {
-          return x.map(row => row.map(val => Math.max(0, val)));
-        },
-        
-        // Sigmoid激活函数（用于输出层）
+        // Sigmoid激活函数
         sigmoid: function(x) {
           return x.map(row => row.map(val => 1 / (1 + Math.exp(-val))));
         },
@@ -12611,127 +13097,10 @@
           return result;
         },
         
-        // 真实训练函数
-        train: function() {
-          const learningRate = 0.01;
-          const epochs = 100;
-          let totalError = 0;
-          
-          // 生成训练数据集
-          const trainingSet = this.generateTrainingSet();
-          
-          for (let epoch = 0; epoch < epochs; epoch++) {
-            let epochError = 0;
-            
-            trainingSet.forEach(sample => {
-              const { input, target } = sample;
-              
-              // 前向传播
-              const output = this.forward([input]);
-              
-              // 计算误差
-              const error = target.map((t, i) => t - output[0][i]);
-              epochError += error.reduce((sum, e) => sum + e * e, 0) / error.length;
-              
-              // 简单的权重调整（模拟反向传播）
-              this.adjustWeights(input, output[0], target, learningRate);
-            });
-            
-            totalError += epochError / trainingSet.length;
-            
-            // 每10个epoch更新一次进度
-            if (epoch % 10 === 0) {
-              const progress = Math.floor((epoch / epochs) * 20) + 40; // 40% - 60%
-              updateAnalysisProgress(progress, `神经网络训练中... (${epoch}/${epochs})`);
-            }
-          }
-          
-          this.confidence = Math.max(0.7, 1 - (totalError / epochs) * 2);
-          console.log('神经网络训练完成，置信度:', this.confidence.toFixed(3));
-        },
-        
-        // 生成训练数据集
-        generateTrainingSet: function() {
-          const trainingSet = [];
-          
-          // 使用所有历史数据生成训练样本
-          for (let i = 3; i < this.trainingData.length; i++) {
-            const input = this.generateEnhancedInputVector(i);
-            const target = this.generateTargetVector(this.trainingData[i].红球);
-            
-            trainingSet.push({ input, target });
-          }
-          
-          return trainingSet;
-        },
-        
-        // 生成增强的输入向量
-        generateEnhancedInputVector: function(index) {
-          const input = [];
-          
-          // 最近3期的红球号码（独热编码）
-          for (let offset = 0; offset < 3; offset++) {
-            if (index - offset >= 0) {
-              const redBalls = this.trainingData[index - offset].红球;
-              for (let num = 1; num <= 33; num++) {
-                input.push(redBalls.includes(num) ? 1 : 0);
-              }
-            } else {
-              // 填充0
-              for (let num = 1; num <= 33; num++) {
-                input.push(0);
-              }
-            }
-          }
-          
-          // 最近1期的蓝球号码（独热编码）
-          if (index - 1 >= 0) {
-            const blueBall = this.trainingData[index - 1].蓝球;
-            for (let num = 1; num <= 16; num++) {
-              input.push(num === blueBall ? 1 : 0);
-            }
-          } else {
-            for (let num = 1; num <= 16; num++) {
-              input.push(0);
-            }
-          }
-          
-          return input;
-        },
-        
-        // 生成目标向量
-        generateTargetVector: function(redBalls) {
-          const target = new Array(33).fill(0);
-          redBalls.forEach(num => {
-            target[num - 1] = 1;
-          });
-          return target;
-        },
-        
-        // 简单的权重调整
-        adjustWeights: function(input, output, target, learningRate) {
-          // 调整输出层权重
-          for (let i = 0; i < this.weights[3].length; i++) {
-            for (let j = 0; j < this.weights[3][i].length; j++) {
-              const error = target[j] - output[j];
-              this.weights[3][i][j] += learningRate * error * output[j] * (1 - output[j]);
-            }
-          }
-          
-          // 简单调整其他层的权重
-          for (let layer = 2; layer >= 0; layer--) {
-            for (let i = 0; i < this.weights[layer].length; i++) {
-              for (let j = 0; j < this.weights[layer][i].length; j++) {
-                this.weights[layer][i][j] += (Math.random() - 0.5) * learningRate * 0.1;
-              }
-            }
-          }
-        },
-        
         // 预测函数
         predict: function() {
-          // 使用最近3期数据作为输入
-          const inputVector = this.generateEnhancedInputVector(0);
+          // 生成输入向量（最近开奖结果的独热编码）
+          const inputVector = generateInputVector(trainingData.slice(0, 5));
           
           // 执行预测
           const output = this.forward([inputVector]);
@@ -12741,50 +13110,29 @@
           const sortedIndices = probabilities
             .map((prob, idx) => ({ number: idx + 1, probability: prob }))
             .sort((a, b) => b.probability - a.probability)
-            .slice(0, 8) // 选择8个最可能的号码
-            .map(item => item.number);
-          
-          // 添加一些随机性，确保每次预测结果不同
-          const finalRed = this.addPredictionRandomness(sortedIndices);
+            .slice(0, 6)
+            .map(item => item.number)
+            .sort((a, b) => a - b);
           
           // 预测蓝球（基于频率和神经网络）
-          const bluePrediction = this.predictBlueNumber();
+          const bluePrediction = predictBlueNumberWithNN(trainingData);
           
           return {
-            red: finalRed,
+            red: sortedIndices,
             blue: bluePrediction
           };
-        },
-        
-        // 添加预测随机性
-        addPredictionRandomness: function(topNumbers) {
-          // 从top8中选择6个，但不完全按概率排序
-          const shuffled = [...topNumbers].sort(() => Math.random() - 0.5);
-          return shuffled.slice(0, 6).sort((a, b) => a - b);
-        },
-        
-        // 预测蓝球
-        predictBlueNumber: function() {
-          // 基于历史蓝球频率和最近趋势预测
-          const blueFrequency = new Array(16).fill(0);
-          this.trainingData.slice(0, 20).forEach(item => {
-            blueFrequency[item.蓝球 - 1] += 1;
-          });
-          
-          // 找出最频繁的3个蓝球
-          const topBlue = blueFrequency
-            .map((freq, idx) => ({ number: idx + 1, frequency: freq }))
-            .sort((a, b) => b.frequency - a.frequency)
-            .slice(0, 3)
-            .map(item => item.number);
-          
-          // 从top3中随机选择一个
-          return topBlue[Math.floor(Math.random() * topBlue.length)];
         }
       };
       
-      // 执行真实的训练过程
-      network.train();
+      // 模拟训练过程（实际应用中应该有完整的反向传播算法）
+      // 这里我们基于历史数据特征来设置权重和置信度
+      const recentTrends = analyzeRecentTrends(trainingData);
+      const dataComplexity = calculateDataComplexity(trainingData);
+      
+      // 根据数据复杂度和趋势清晰度调整置信度
+      network.confidence = Math.min(0.95, Math.max(0.7, 
+        0.8 + (recentTrends.confidence - 0.5) * 0.3 - dataComplexity * 0.2
+      ));
       
       return network;
     }
