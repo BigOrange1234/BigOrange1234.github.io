@@ -318,6 +318,16 @@
       
       // 更新历史表格
       updateHistoryTable('all');
+      
+      // 执行增量学习而不是完全重训
+      if (aiLearningData && aiLearningData.weights) {
+        console.log('执行AI增量学习...');
+        performIncrementalLearning(newData);
+      } else {
+        // 如果没有学习数据，进行完整训练
+        console.log('首次训练AI...');
+        trainAI(historicalData);
+      }
     }
 
     // 显示更新通知
@@ -366,6 +376,141 @@
           }
         }, 300);
       }, 3000);
+    }
+
+    // 手动添加数据功能
+    function setupManualAddData() {
+      const modal = document.getElementById('manual-add-modal');
+      const content = document.getElementById('manual-add-content');
+      const form = document.getElementById('manual-add-form');
+      const closeBtn = document.getElementById('close-manual-add');
+      const cancelBtn = document.getElementById('cancel-manual-add');
+      
+      // 显示手动添加模态框
+      window.showManualAddModal = function() {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => {
+          content.classList.remove('scale-95', 'opacity-0');
+          content.classList.add('scale-100', 'opacity-100');
+        }, 100);
+      };
+      
+      // 隐藏模态框
+      function hideModal() {
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+          modal.classList.remove('flex');
+          modal.classList.add('hidden');
+          form.reset();
+        }, 300);
+      }
+      
+      // 绑定事件
+      closeBtn.addEventListener('click', hideModal);
+      cancelBtn.addEventListener('click', hideModal);
+      
+      // 点击背景关闭
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          hideModal();
+        }
+      });
+      
+      // 处理表单提交
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        try {
+          const issue = document.getElementById('manual-issue').value.trim();
+          const date = document.getElementById('manual-date').value;
+          const redInput = document.getElementById('manual-red').value.trim();
+          const blue = parseInt(document.getElementById('manual-blue').value);
+          
+          // 验证期号格式
+          if (!/^\d{7,8}$/.test(issue)) {
+            showUpdateNotification('期号格式不正确（应为7-8位数字）', 'error');
+            return;
+          }
+          
+          // 验证日期
+          if (!date) {
+            showUpdateNotification('请选择开奖日期', 'error');
+            return;
+          }
+          
+          // 验证红球号码
+          const redNumbers = redInput.split(/\s+/).map(n => parseInt(n)).filter(n => !isNaN(n));
+          if (redNumbers.length !== 6) {
+            showUpdateNotification('红球号码数量不正确（应为6个）', 'error');
+            return;
+          }
+          
+          // 验证红球号码范围和唯一性
+          const redSet = new Set();
+          for (const num of redNumbers) {
+            if (num < 1 || num > 33 || !Number.isInteger(num)) {
+              showUpdateNotification('红球号码超出范围（1-33）', 'error');
+              return;
+            }
+            if (redSet.has(num)) {
+              showUpdateNotification('红球号码有重复', 'error');
+              return;
+            }
+            redSet.add(num);
+          }
+          
+          // 验证蓝球号码
+          if (blue < 1 || blue > 16 || !Number.isInteger(blue)) {
+            showUpdateNotification('蓝球号码超出范围（1-16）', 'error');
+            return;
+          }
+          
+          // 验证期号是否合理
+          if (!isValidIssueNumber(issue)) {
+            showUpdateNotification('期号不合理，请检查', 'error');
+            return;
+          }
+          
+          // 检查是否已经存在
+          if (historicalData.some(item => item.期号 === issue)) {
+            showUpdateNotification('该期号数据已存在', 'warning');
+            return;
+          }
+          
+          // 构造新数据
+          const newData = {
+            期号: issue,
+            开奖日期: date,
+            红球: redNumbers.sort((a, b) => a - b),
+            蓝球: blue,
+            一等奖: 0, // 手动添加时默认为0
+            销售额: '0',
+            奖池: '0'
+          };
+          
+          // 显示确认对话框
+          const confirmed = await showConfirmDialog(`确认添加数据：${newData.期号}期\n红球：${newData.红球.join('、')}\n蓝球：${newData.蓝球}\n开奖日期：${newData.开奖日期}`);
+          
+          if (confirmed) {
+            // 添加新数据
+            addNewDataToHistory(newData);
+            showUpdateNotification(`成功添加${newData.期号}期数据`, 'success');
+            
+            // 重新加载图表和统计
+            loadHistoricalData();
+            initializeCharts();
+            
+            // 隐藏模态框
+            hideModal();
+          }
+          
+        } catch (error) {
+          console.error('手动添加数据失败:', error);
+          showUpdateNotification('添加数据失败，请检查输入', 'error');
+        }
+      });
     }
 
     // 显示确认对话框
@@ -426,6 +571,8 @@
         });
       });
     }
+
+
   </script>
   <style type="text/tailwindcss">
     @layer utilities {
@@ -544,9 +691,13 @@
           <div class="flex justify-between items-center mb-4">
             <div class="flex justify-between items-center">
               <h2 class="text-lg font-semibold text-gray-800">历史开奖数据</h2>
-              <button id="check-update-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center transition-colors duration-200">
+              <button id="check-update-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center transition-colors duration-200 mr-2">
                 <i class="fa fa-refresh mr-2"></i>
                 检查更新
+              </button>
+              <button onclick="showManualAddModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm flex items-center transition-colors duration-200">
+                <i class="fa fa-plus-circle mr-2"></i>
+                手动添加
               </button>
             </div>
             <div class="flex items-center space-x-2">
@@ -722,6 +873,49 @@
     </div>
   </main>
 
+  <!-- 手动添加数据模态框 -->
+  <div id="manual-add-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full transform transition-all duration-300 scale-95 opacity-0" id="manual-add-content">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-xl font-semibold text-gray-800">手动添加开奖数据</h3>
+        <button id="close-manual-add" class="text-gray-400 hover:text-gray-600">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <form id="manual-add-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">期号</label>
+          <input type="text" id="manual-issue" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="例如：2025144" required>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">开奖日期</label>
+          <input type="date" id="manual-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">红球号码（用空格分隔）</label>
+          <input type="text" id="manual-red" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="例如：01 08 15 20 26 33" required>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">蓝球号码</label>
+          <input type="number" id="manual-blue" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" min="1" max="16" placeholder="例如：13" required>
+        </div>
+        
+        <div class="flex justify-end space-x-3 pt-4">
+          <button type="button" id="cancel-manual-add" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+            取消
+          </button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            添加数据
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 帮助模态框 -->
   <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
     <div class="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -818,6 +1012,21 @@
   <script>
     // 历史开奖数据 - 包含2025年第1期到第142期的完整数据
     const historicalData = [
+  {
+    "期号": "2025144",
+    "开奖日期": "2025-12-14",
+    "红球": [
+      1,
+      8,
+      15,
+      20,
+      26,
+      33
+    ],
+    "蓝球": 13,
+    "一等奖": 18,
+    "一等奖奖金": "6,211,544"
+  },
   {
     "期号": "2025143",
     "开奖日期": "2025-12-11",
@@ -10276,7 +10485,12 @@
         const input = createInputVector(data, index + 5, learningResult);
         
         // 预测
-        const prediction = predictWithNeuralNetwork(input, learningResult);
+        // 使用不同策略进行多样化预测
+        const strategies = ['balanced', 'diverse', 'high_probability'];
+        const predictions = strategies.map(strategy => 
+          predictWithNeuralNetwork(input, learningResult, strategy)
+        );
+        const prediction = predictions[Math.floor(Math.random() * predictions.length)];
         
         // 计算准确率
         const hitCount = countCorrectPredictions(prediction, item.红球);
@@ -10292,21 +10506,73 @@
       console.log(`模型验证完成，准确率: ${accuracy}%`);
     }
 
-    // 使用神经网络预测
-    function predictWithNeuralNetwork(input, learningResult) {
+    // 使用神经网络预测 - 增强版，支持多样化预测
+    function predictWithNeuralNetwork(input, learningResult, strategy = 'balanced') {
       const { outputs } = forwardPropagation(input, learningResult);
       const finalOutput = outputs[outputs.length - 1];
       
-      // 选择概率最高的6个号码
+      // 创建预测数组
       const predictions = [];
       for (let i = 0; i < finalOutput.length; i++) {
         predictions.push({ number: i + 1, probability: finalOutput[i] });
       }
       
-      // 按概率排序并选择前6个
+      // 按概率排序
       predictions.sort((a, b) => b.probability - a.probability);
       
-      return predictions.slice(0, 6).map(p => p.number);
+      let selectedNumbers = [];
+      
+      switch (strategy) {
+        case 'high_probability':
+          // 高概率策略：选择概率最高的号码
+          selectedNumbers = predictions.slice(0, 6).map(p => p.number);
+          break;
+          
+        case 'diverse':
+          // 多样化策略：从不同概率区间选择号码
+          const top10 = predictions.slice(0, 10);
+          const mid10 = predictions.slice(10, 20);
+          const low10 = predictions.slice(20, 30);
+          
+          // 从不同区间选择号码
+          selectedNumbers = [
+            ...top10.slice(0, 3).map(p => p.number),
+            ...mid10.slice(0, 2).map(p => p.number),
+            ...low10.slice(0, 1).map(p => p.number)
+          ];
+          break;
+          
+        case 'balanced':
+        default:
+          // 平衡策略：主要选择高概率号码，但加入一些中等概率号码以增加多样性
+          const top15 = predictions.slice(0, 15);
+          
+          // 确保至少有4个高概率号码
+          selectedNumbers = top15.slice(0, 4).map(p => p.number);
+          
+          // 从剩余的高概率号码中随机选择2个，增加随机性
+          const remaining = top15.slice(4);
+          shuffleArray(remaining);
+          selectedNumbers.push(...remaining.slice(0, 2).map(p => p.number));
+          break;
+      }
+      
+      // 确保号码唯一且排序
+      selectedNumbers = [...new Set(selectedNumbers)].sort((a, b) => a - b);
+      
+      // 如果数量不足6个，从高概率号码中补充
+      if (selectedNumbers.length < 6) {
+        const missingCount = 6 - selectedNumbers.length;
+        const existingSet = new Set(selectedNumbers);
+        const补充号码 = predictions
+          .filter(p => !existingSet.has(p.number))
+          .slice(0, missingCount)
+          .map(p => p.number);
+        selectedNumbers.push(...补充号码);
+        selectedNumbers.sort((a, b) => a - b);
+      }
+      
+      return selectedNumbers;
     }
 
     // 辅助函数
@@ -10354,6 +10620,9 @@
       
       // 初始化图表
       initChart();
+      
+      // 初始化手动添加数据功能
+      setupManualAddData();
       
       // 加载AI学习数据
       loadAILearningData();
@@ -10828,6 +11097,149 @@
       const isOutOfDate = lastUpdateTime && (now - lastUpdateTime > 7 * 24 * 60 * 60 * 1000);
       
       return hasNewData || isOutOfDate;
+    }
+
+    // 增量学习函数 - 只对新数据进行学习，保留已有知识
+    function performIncrementalLearning(newData) {
+      console.log(`对新数据 ${newData.期号} 进行增量学习...`);
+      
+      // 计算新数据的权重（最新数据权重最高）
+      const weight = Math.exp(-0 / 50); // 最新数据权重为1
+      aiLearningData.weights[newData.期号] = weight;
+      
+      // 更新频率统计 - 只更新新数据相关的频率
+      newData.红球.forEach(num => {
+        aiLearningData.frequency.red[num] += weight;
+      });
+      
+      // 更新蓝球频率
+      aiLearningData.frequency.blue[newData.蓝球] += weight;
+      
+      // 更新趋势数据 - 只更新最近的趋势
+      updateRecentTrends(newData);
+      
+      // 更新模式识别 - 分析新数据的模式
+      updatePatterns(newData);
+      
+      // 更新相关性分析 - 只分析新数据与最近几期的相关性
+      updateRecentCorrelations(newData);
+      
+      // 更新神经网络 - 微调而不是重训
+      fineTuneNeuralNetwork(newData);
+      
+      // 更新学习数据的元信息
+      aiLearningData.lastUpdated = new Date().toISOString();
+      aiLearningData.totalTrainingData = historicalData.length;
+      
+      // 保存更新后的学习结果
+      try {
+        localStorage.setItem('aiLearningData', JSON.stringify(aiLearningData));
+        console.log('增量学习完成，学习结果已保存');
+      } catch (error) {
+        console.error('保存学习结果失败:', error);
+      }
+    }
+
+    // 更新最近趋势
+    function updateRecentTrends(newData) {
+      // 更新冷热号趋势 - 只关注最近10期
+      const recentData = historicalData.slice(0, 10);
+      
+      // 重置最近趋势统计
+      aiLearningData.trends.recentHotRed = {};
+      aiLearningData.trends.recentColdRed = {};
+      
+      // 统计最近出现频率
+      const recentFrequency = {};
+      recentData.forEach(item => {
+        item.红球.forEach(num => {
+          recentFrequency[num] = (recentFrequency[num] || 0) + 1;
+        });
+      });
+      
+      // 找出最近的冷热号
+      const sortedRecent = Object.entries(recentFrequency).sort((a, b) => b[1] - a[1]);
+      aiLearningData.trends.recentHotRed = sortedRecent.slice(0, 10).map(([num, freq]) => ({ number: parseInt(num), frequency: freq }));
+      aiLearningData.trends.recentColdRed = sortedRecent.slice(-10).map(([num, freq]) => ({ number: parseInt(num), frequency: freq }));
+    }
+
+    // 更新模式识别
+    function updatePatterns(newData) {
+      // 分析新数据的连号模式
+      const redNumbers = newData.红球;
+      for (let i = 0; i < redNumbers.length - 1; i++) {
+        if (redNumbers[i + 1] - redNumbers[i] === 1) {
+          const pair = `${redNumbers[i]}-${redNumbers[i + 1]}`;
+          aiLearningData.patterns.consecutive[pair] = (aiLearningData.patterns.consecutive[pair] || 0) + 1;
+        }
+      }
+      
+      // 分析区间分布模式
+      const zones = {
+        '1-11': 0,
+        '12-22': 0,
+        '23-33': 0
+      };
+      
+      redNumbers.forEach(num => {
+        if (num <= 11) zones['1-11']++;
+        else if (num <= 22) zones['12-22']++;
+        else zones['23-33']++;
+      });
+      
+      const zonePattern = `${zones['1-11']}-${zones['12-22']}-${zones['23-33']}`;
+      aiLearningData.patterns.zone[zonePattern] = (aiLearningData.patterns.zone[zonePattern] || 0) + 1;
+    }
+
+    // 更新最近相关性
+    function updateRecentCorrelations(newData) {
+      // 只分析新数据与最近5期的相关性
+      const recentData = historicalData.slice(1, 6); // 最近5期（不包括当前新数据）
+      
+      recentData.forEach(item => {
+        // 红-红相关性
+        newData.红球.forEach(red1 => {
+          item.红球.forEach(red2 => {
+            if (red1 !== red2) {
+              const pair = `${Math.min(red1, red2)}-${Math.max(red1, red2)}`;
+              aiLearningData.correlation.redRed[pair] = (aiLearningData.correlation.redRed[pair] || 0) + 1;
+            }
+          });
+        });
+        
+        // 红-蓝相关性
+        newData.红球.forEach(red => {
+          const pair = `${red}-${item.蓝球}`;
+          aiLearningData.correlation.redBlue[pair] = (aiLearningData.correlation.redBlue[pair] || 0) + 1;
+        });
+      });
+    }
+
+    // 微调神经网络
+    function fineTuneNeuralNetwork(newData) {
+      if (!aiLearningData.neuralNetwork || !aiLearningData.neuralNetwork.weights) {
+        return; // 如果没有神经网络数据，跳过微调
+      }
+      
+      // 创建新数据的输入向量
+      const inputVector = createInputVector(historicalData, 0, aiLearningData);
+      
+      // 创建目标向量（one-hot编码）
+      const targetVector = new Array(33).fill(0);
+      newData.红球.forEach(num => {
+        targetVector[num - 1] = 1;
+      });
+      
+      // 进行少量的反向传播来微调网络
+      const learningRate = 0.01; // 微调学习率较低
+      const epochs = 5; // 只进行5轮微调
+      
+      for (let epoch = 0; epoch < epochs; epoch++) {
+        const { outputs, weightedSums } = forwardPropagation(inputVector, aiLearningData);
+        backPropagation(inputVector, targetVector, outputs, weightedSums, aiLearningData, learningRate);
+      }
+      
+      console.log('神经网络微调完成');
     }
 
     // 生成AI分析结果
@@ -11440,7 +11852,12 @@
             const inputVector = createInputVector(historicalData, 0, aiLearningData);
             
             // 使用神经网络预测红球
-            const neuralNetworkPredictions = predictWithNeuralNetwork(inputVector, aiLearningData);
+            // 使用不同策略进行多样化预测
+            const strategies = ['balanced', 'diverse', 'high_probability'];
+            const predictions = strategies.map(strategy => 
+              predictWithNeuralNetwork(inputVector, aiLearningData, strategy)
+            );
+            const neuralNetworkPredictions = predictions[Math.floor(Math.random() * predictions.length)];
             
             console.log('神经网络预测结果:', neuralNetworkPredictions);
             
@@ -15228,6 +15645,16 @@
       
       // 更新历史表格
       updateHistoryTable('all');
+      
+      // 执行增量学习而不是完全重训
+      if (aiLearningData && aiLearningData.weights) {
+        console.log('执行AI增量学习...');
+        performIncrementalLearning(newData);
+      } else {
+        // 如果没有学习数据，进行完整训练
+        console.log('首次训练AI...');
+        trainAI(historicalData);
+      }
     }
 
     // 显示更新通知
@@ -15276,6 +15703,141 @@
           }
         }, 300);
       }, 3000);
+    }
+
+    // 手动添加数据功能
+    function setupManualAddData() {
+      const modal = document.getElementById('manual-add-modal');
+      const content = document.getElementById('manual-add-content');
+      const form = document.getElementById('manual-add-form');
+      const closeBtn = document.getElementById('close-manual-add');
+      const cancelBtn = document.getElementById('cancel-manual-add');
+      
+      // 显示手动添加模态框
+      window.showManualAddModal = function() {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => {
+          content.classList.remove('scale-95', 'opacity-0');
+          content.classList.add('scale-100', 'opacity-100');
+        }, 100);
+      };
+      
+      // 隐藏模态框
+      function hideModal() {
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+          modal.classList.remove('flex');
+          modal.classList.add('hidden');
+          form.reset();
+        }, 300);
+      }
+      
+      // 绑定事件
+      closeBtn.addEventListener('click', hideModal);
+      cancelBtn.addEventListener('click', hideModal);
+      
+      // 点击背景关闭
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          hideModal();
+        }
+      });
+      
+      // 处理表单提交
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        try {
+          const issue = document.getElementById('manual-issue').value.trim();
+          const date = document.getElementById('manual-date').value;
+          const redInput = document.getElementById('manual-red').value.trim();
+          const blue = parseInt(document.getElementById('manual-blue').value);
+          
+          // 验证期号格式
+          if (!/^\d{7,8}$/.test(issue)) {
+            showUpdateNotification('期号格式不正确（应为7-8位数字）', 'error');
+            return;
+          }
+          
+          // 验证日期
+          if (!date) {
+            showUpdateNotification('请选择开奖日期', 'error');
+            return;
+          }
+          
+          // 验证红球号码
+          const redNumbers = redInput.split(/\s+/).map(n => parseInt(n)).filter(n => !isNaN(n));
+          if (redNumbers.length !== 6) {
+            showUpdateNotification('红球号码数量不正确（应为6个）', 'error');
+            return;
+          }
+          
+          // 验证红球号码范围和唯一性
+          const redSet = new Set();
+          for (const num of redNumbers) {
+            if (num < 1 || num > 33 || !Number.isInteger(num)) {
+              showUpdateNotification('红球号码超出范围（1-33）', 'error');
+              return;
+            }
+            if (redSet.has(num)) {
+              showUpdateNotification('红球号码有重复', 'error');
+              return;
+            }
+            redSet.add(num);
+          }
+          
+          // 验证蓝球号码
+          if (blue < 1 || blue > 16 || !Number.isInteger(blue)) {
+            showUpdateNotification('蓝球号码超出范围（1-16）', 'error');
+            return;
+          }
+          
+          // 验证期号是否合理
+          if (!isValidIssueNumber(issue)) {
+            showUpdateNotification('期号不合理，请检查', 'error');
+            return;
+          }
+          
+          // 检查是否已经存在
+          if (historicalData.some(item => item.期号 === issue)) {
+            showUpdateNotification('该期号数据已存在', 'warning');
+            return;
+          }
+          
+          // 构造新数据
+          const newData = {
+            期号: issue,
+            开奖日期: date,
+            红球: redNumbers.sort((a, b) => a - b),
+            蓝球: blue,
+            一等奖: 0, // 手动添加时默认为0
+            销售额: '0',
+            奖池: '0'
+          };
+          
+          // 显示确认对话框
+          const confirmed = await showConfirmDialog(`确认添加数据：${newData.期号}期\n红球：${newData.红球.join('、')}\n蓝球：${newData.蓝球}\n开奖日期：${newData.开奖日期}`);
+          
+          if (confirmed) {
+            // 添加新数据
+            addNewDataToHistory(newData);
+            showUpdateNotification(`成功添加${newData.期号}期数据`, 'success');
+            
+            // 重新加载图表和统计
+            loadHistoricalData();
+            initializeCharts();
+            
+            // 隐藏模态框
+            hideModal();
+          }
+          
+        } catch (error) {
+          console.error('手动添加数据失败:', error);
+          showUpdateNotification('添加数据失败，请检查输入', 'error');
+        }
+      });
     }
 
     // 显示确认对话框
@@ -15336,6 +15898,8 @@
         });
       });
     }
+
+
   </script>
 </body>
 </html>
