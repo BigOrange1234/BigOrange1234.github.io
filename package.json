@@ -1,6 +1,7 @@
 {
-  "name": "ssq-ai-v23",
-  "version": "23.0.0",
+  "name": "my-project",
+  "version": "1.0.0"
+}
   "description": "双色球AI智能选号助手 V23-稳定增强版",
   "main": "server.js",
   "scripts": {
