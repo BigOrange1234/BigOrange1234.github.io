@@ -1,13 +1,11 @@
 {
   "name": "my-project",
-  "version": "1.0.0"
-}
+  "version": "1.0.0",
   "description": "双色球AI智能选号助手 V23-稳定增强版",
   "main": "server.js",
   "scripts": {
-  "serve": "vue-cli-service serve",
-  "build": "vue-cli-service build"  // 必须有这一行
-}
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build",
     "start": "node server.js",
     "dev": "node server.js"
   },
