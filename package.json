@@ -1,31 +1,38 @@
 {
-  "name": "my-project",
+  "name": "ssq-ai-vue",
   "version": "1.0.0",
-  "description": "双色球AI智能选号助手 V23-稳定增强版",
-  "main": "server.js",
+  "description": "双色球AI智能选号助手 - Vue版本",
+  "type": "module",
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build",
-    "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "vite build && echo '构建完成，请手动部署dist目录'"
   },
   "keywords": [
     "双色球",
     "彩票",
     "AI预测",
-    "数据分析"
+    "数据分析",
+    "Vue",
+    "Vite"
   ],
   "author": "AI助手",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.17.1",
-    "vue": "^2.6.14"
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "pinia": "^2.1.7",
+    "chart.js": "^4.4.8",
+    "tailwindcss": "^3.4.3"
   },
   "devDependencies": {
-    "@vue/cli-service": "^4.5.19",
-    "vue-template-compiler": "^2.6.14"
+    "@vitejs/plugin-vue": "^5.0.4",
+    "vite": "^5.2.0",
+    "postcss": "^8.4.38",
+    "autoprefixer": "^10.4.19"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }

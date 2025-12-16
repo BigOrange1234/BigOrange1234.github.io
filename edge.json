@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "name": "ssq-ai-assistant",
+  "description": "双色球AI智能选号助手",
+  "author": "AI Assistant",
+  "deploy": {
+    "region": "ap-shanghai",
+    "bucket": "ssq-ai-assistant",
+    "source": {
+      "dir": "./",
+      "include": ["*.html", "*.css", "*.js", "*.json", "*.md"],
+      "exclude": ["node_modules/**", "*.log", "*.tmp", "*.temp"]
+    },
+    "output": {
+      "dir": "./dist",
+      "clean": true
+    },
+    "build": {
+      "commands": [],
+      "env": {}
+    },
+    "cache": {
+      "ignore": ["*.html"]
+    },
+    "headers": [
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "text/html; charset=utf-8"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/javascript; charset=utf-8"
+          }
+        ]
+      },
+      {
+        "source": "**/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
+          },
+          {
+            "key": "Content-Type",
+            "value": "text/css; charset=utf-8"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "source": "/",
+        "destination": "/index.html",
+        "status": 200
+      },
+      {
+        "source": "/404",
+        "destination": "/index.html",
+        "status": 200
+      }
+    ]
+  },
+  "dev": {
+    "port": 3000,
+    "host": "localhost",
+    "proxy": {}
+  }
+}
